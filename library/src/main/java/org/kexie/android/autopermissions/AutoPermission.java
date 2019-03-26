@@ -19,7 +19,6 @@ import androidx.annotation.RestrictTo;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 
 @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
@@ -42,6 +41,7 @@ public final class AutoPermission
         @Override
         public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
             Bundle bundle = new Bundle();
+            //防御性拷贝
             bundle.putStringArrayList(AutoPermission.class.getCanonicalName(),
                     new ArrayList<>(permission));
             AutoPermission autoPermission = new AutoPermission();
@@ -49,9 +49,9 @@ public final class AutoPermission
             activity.getFragmentManager()
                     .beginTransaction()
                     .add(autoPermission, AutoPermission.class.getCanonicalName())
-                    .commit();
+                    .commitAllowingStateLoss();
             Application application = activity.getApplication();
-            application.registerActivityLifecycleCallbacks(this);
+            application.unregisterActivityLifecycleCallbacks(this);
         }
     }
 
@@ -68,9 +68,9 @@ public final class AutoPermission
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        requests = Objects.requireNonNull(getArguments()
-                .getStringArrayList(AutoPermission.class.getCanonicalName()));
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        requests = getArguments()
+                .getStringArrayList(AutoPermission.class.getCanonicalName());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && requests != null) {
             requestPermissions(requests.toArray(new String[0]), REQUEST_NORMAL_PERMISSIONS);
         }
     }
@@ -83,23 +83,23 @@ public final class AutoPermission
             if (Permissions.hasWindowPermission(getContext())) {
                 requests.remove(Manifest.permission.SYSTEM_ALERT_WINDOW);
             }
-            finish();
+            finishAndResult();
         }
     }
 
 
     @RequiresApi(api = Build.VERSION_CODES.M)
-    private void finish() {
+    private void finishAndResult() {
         Context context = getContext().getApplicationContext();
         if (context instanceof OnRequestPermissionsCallback) {
             ((OnRequestPermissionsCallback) context).onResult(requests.isEmpty()
-                    ? Collections.emptyList()
+                    ? Collections.<String>emptyList()
                     : Collections.unmodifiableList(requests));
         }
         getFragmentManager()
                 .beginTransaction()
                 .remove(this)
-                .commit();
+                .commitAllowingStateLoss();
     }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
@@ -123,7 +123,7 @@ public final class AutoPermission
                 intent.setData(Uri.parse("package:" + getContext().getPackageName()));
                 startActivityForResult(intent, REQUEST_WINDOWS_PERMISSION);
             } else {
-                finish();
+                finishAndResult();
             }
         }
     }
