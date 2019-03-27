@@ -10,7 +10,7 @@ public class Application extends android.app.Application implements OnRequestPer
     private static final String TAG = "Application";
 
     @Override
-    public void onResult(List<String> permissions) {
-        Log.d(TAG, "onResult: " + permissions);
+    public void onRequestPermissionsResult(List<String> permissions) {
+        Log.d(TAG, "onRequestPermissionsResult: " + permissions);
     }
 }

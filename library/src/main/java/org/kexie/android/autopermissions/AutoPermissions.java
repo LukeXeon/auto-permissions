@@ -1,13 +1,16 @@
 package org.kexie.android.autopermissions;
 
 import android.Manifest;
+import android.app.Activity;
 import android.app.AppOpsManager;
+import android.app.Application;
 import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.PixelFormat;
 import android.os.Binder;
 import android.os.Build;
+import android.os.Bundle;
 import android.provider.Settings;
 import android.util.ArraySet;
 import android.view.View;
@@ -17,17 +20,47 @@ import androidx.annotation.RequiresApi;
 import java.lang.reflect.Method;
 import java.util.*;
 
-@SuppressWarnings("WeakerAccess")
-public final class Permissions {
+@SuppressWarnings({"WeakerAccess","deprecation"})
+public final class AutoPermissions {
 
-    private Permissions() {
-        throw new AssertionError();
-    }
-
+    //AppOpsManager.OP_SYSTEM_ALERT_WINDOW = 24
     private final static int OP_SYSTEM_ALERT_WINDOW = 24;
 
+    private static final class LifecycleTrigger
+            extends EmptyActivityLifecycleCallbacks {
+
+        private final List<String> permission;
+
+        private LifecycleTrigger(List<String> permission) {
+            this.permission = permission;
+        }
+
+        @Override
+        public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+            RequestFragment requestFragment = RequestFragment.newInstance(permission);
+            activity.getFragmentManager()
+                    .beginTransaction()
+                    .add(requestFragment, RequestFragment.class.getCanonicalName())
+                    .commitAllowingStateLoss();
+            Application application = activity.getApplication();
+            application.unregisterActivityLifecycleCallbacks(this);
+        }
+    }
+
+    static void init(Context context) {
+        List<String> requestedPermissions = getDeniedPermissions(context);
+        if (requestedPermissions.size() != 0) {
+            ((Application) context.getApplicationContext())
+                    .registerActivityLifecycleCallbacks(new LifecycleTrigger(requestedPermissions));
+        }
+    }
+
+    private AutoPermissions() {
+        throw new AssertionError("No instantiate");
+    }
+
     @NonNull
-    public static List<String> getDefinedPermissions(Context context) {
+    public static List<String> getDefinedPermissions(@NonNull Context context) {
         try {
             PackageInfo packageInfo = context.getPackageManager()
                     .getPackageInfo(context.getPackageName(),
@@ -43,7 +76,7 @@ public final class Permissions {
     }
 
     @NonNull
-    public static List<String> getDeniedPermissions(Context context) {
+    public static List<String> getDeniedPermissions(@NonNull Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return Collections.emptyList();
         }
@@ -67,9 +100,9 @@ public final class Permissions {
         return new ArrayList<>(requestedPermissionsList);
     }
 
-    public static boolean hasWindowPermission(Context context) {
+    public static boolean hasWindowPermission(@NonNull Context context) {
         if (Build.VERSION.SDK_INT == Build.VERSION_CODES.O) {
-            return hasWindowPermissionForO(context);
+            return hasWindowPermissionInO(context);
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             return Settings.canDrawOverlays(context);
@@ -83,18 +116,18 @@ public final class Permissions {
      * 理论上6.0以上才需处理权限，但有的国内rom在6.0以下就添加了权限
      * 其实此方式也可以用于判断6.0以上版本，只不过有更简单的canDrawOverlays代替
      */
-    @RequiresApi(api = Build.VERSION_CODES.KITKAT)
+    @RequiresApi(Build.VERSION_CODES.KITKAT)
     @SuppressWarnings("JavaReflectionMemberAccess")
     private static boolean hasWindowPermissionBelowM(Context context) {
         try {
-            AppOpsManager manager = (AppOpsManager) context.getSystemService(Context.APP_OPS_SERVICE);
+            AppOpsManager manager = (AppOpsManager) context
+                    .getSystemService(Context.APP_OPS_SERVICE);
             Method dispatchMethod = AppOpsManager.class
                     .getMethod("checkOp",
                             Integer.TYPE,
                             Integer.TYPE,
                             String.class);
-            //AppOpsManager.OP_SYSTEM_ALERT_WINDOW = 24
-            return AppOpsManager.MODE_ALLOWED == (Integer) dispatchMethod.invoke(
+            return AppOpsManager.MODE_ALLOWED == (int) dispatchMethod.invoke(
                     manager,
                     OP_SYSTEM_ALERT_WINDOW,
                     Binder.getCallingUid(),
@@ -109,7 +142,7 @@ public final class Permissions {
      * 针对8.0官方bug:在用户授予权限后Settings.canDrawOverlays或checkOp方法判断仍然返回false
      */
     @RequiresApi(api = Build.VERSION_CODES.O)
-    private static boolean hasWindowPermissionForO(Context context) {
+    private static boolean hasWindowPermissionInO(Context context) {
         try {
             WindowManager mgr = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
             if (mgr == null) return false;

@@ -13,7 +13,7 @@ public final class AutoPermissionsInitializer extends ContentProvider {
 
     @Override
     public boolean onCreate() {
-        AutoPermission.init(getContext());
+        AutoPermissions.init(getContext());
         return true;
     }
 
