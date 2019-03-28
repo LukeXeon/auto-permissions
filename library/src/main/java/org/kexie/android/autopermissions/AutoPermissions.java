@@ -47,6 +47,7 @@ public final class AutoPermissions {
     }
 
     public static void requestAll(Activity activity) {
+        selfCheck();
         List<String> permissions = getDeniedPermissions(activity);
         if (!permissions.isEmpty()) {
             RequestFragment requestFragment = RequestFragment.newInstance(permissions);
@@ -58,7 +59,7 @@ public final class AutoPermissions {
     }
 
     static void init(Context context) {
-        if (sInit.compareAndSet(true, false)) {
+        if (sInit.compareAndSet(false, true)) {
             ((Application) context.getApplicationContext())
                     .registerActivityLifecycleCallbacks(new LifecycleEventTrigger());
         }
