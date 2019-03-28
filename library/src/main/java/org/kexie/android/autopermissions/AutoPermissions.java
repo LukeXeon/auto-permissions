@@ -19,6 +19,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @SuppressWarnings({"WeakerAccess","deprecation"})
 public final class AutoPermissions {
@@ -26,37 +28,61 @@ public final class AutoPermissions {
     //AppOpsManager.OP_SYSTEM_ALERT_WINDOW = 24
     private final static int OP_SYSTEM_ALERT_WINDOW = 24;
 
-    private static final class LifecycleTrigger
+    private static final class LifecycleEventTrigger
             extends EmptyActivityLifecycleCallbacks {
-
-        private final List<String> permission;
-
-        private LifecycleTrigger(List<String> permission) {
-            this.permission = permission;
-        }
-
         @Override
         public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
-            RequestFragment requestFragment = RequestFragment.newInstance(permission);
+            requestAll(activity);
+            activity.getApplication()
+                    .unregisterActivityLifecycleCallbacks(this);
+        }
+    }
+
+    private static final AtomicBoolean sInit = new AtomicBoolean(false);
+
+    static final CopyOnWriteArrayList<OnRequestPermissionsCallback> sCallbacks = new CopyOnWriteArrayList<>();
+
+    private AutoPermissions() {
+        throw new AssertionError("Can't initialize");
+    }
+
+    public static void requestAll(Activity activity) {
+        List<String> permissions = getDeniedPermissions(activity);
+        if (!permissions.isEmpty()) {
+            RequestFragment requestFragment = RequestFragment.newInstance(permissions);
             activity.getFragmentManager()
                     .beginTransaction()
                     .add(requestFragment, RequestFragment.class.getCanonicalName())
                     .commitAllowingStateLoss();
-            Application application = activity.getApplication();
-            application.unregisterActivityLifecycleCallbacks(this);
         }
     }
 
     static void init(Context context) {
-        List<String> requestedPermissions = getDeniedPermissions(context);
-        if (requestedPermissions.size() != 0) {
+        if (sInit.compareAndSet(true, false)) {
             ((Application) context.getApplicationContext())
-                    .registerActivityLifecycleCallbacks(new LifecycleTrigger(requestedPermissions));
+                    .registerActivityLifecycleCallbacks(new LifecycleEventTrigger());
         }
     }
 
-    private AutoPermissions() {
-        throw new AssertionError("No instantiate");
+    public static void addCallback(OnRequestPermissionsCallback callback) {
+        selfCheck();
+        if (callback != null) {
+            sCallbacks.add(callback);
+        }
+    }
+
+    public static void removeCallback(OnRequestPermissionsCallback callback) {
+        selfCheck();
+        if (callback != null) {
+            sCallbacks.remove(callback);
+        }
+    }
+
+    private static void selfCheck() {
+        if (!sInit.get()) {
+            throw new IllegalStateException("Without initialization, " +
+                    "you need to use this method after Application#attachBaseContext");
+        }
     }
 
     @NonNull
@@ -66,7 +92,7 @@ public final class AutoPermissions {
                     .getPackageInfo(context.getPackageName(),
                             PackageManager.GET_PERMISSIONS);
             if (packageInfo.requestedPermissions != null) {
-                return Arrays.asList(packageInfo.requestedPermissions);
+                return Collections.unmodifiableList(Arrays.asList(packageInfo.requestedPermissions));
             } else {
                 return Collections.emptyList();
             }
@@ -97,7 +123,7 @@ public final class AutoPermissions {
                 }
             }
         }
-        return new ArrayList<>(requestedPermissionsList);
+        return Collections.unmodifiableList(new ArrayList<>(requestedPermissionsList));
     }
 
     public static boolean hasWindowPermission(@NonNull Context context) {

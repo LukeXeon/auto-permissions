@@ -1,10 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-          package="org.kexie.android.autopermissions">
+    package="org.kexie.android.autopermissions">
+
     <application>
         <provider
-                android:authorities="${applicationId}.auto-permissions-initializer"
-                android:name=".AutoPermissionsInitializer"
-                android:exported="false"
-                android:multiprocess="false"/>
+            android:name=".AutoPermissionsInitializer"
+            android:authorities="${applicationId}.auto-permissions-initializer"
+            android:exported="false"
+            android:multiprocess="false" />
     </application>
 </manifest>

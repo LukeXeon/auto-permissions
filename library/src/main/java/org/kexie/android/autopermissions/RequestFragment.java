@@ -2,7 +2,6 @@ package org.kexie.android.autopermissions;
 
 import android.Manifest;
 import android.app.Fragment;
-import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -29,12 +28,10 @@ public final class RequestFragment
 
     private List<String> requests;
 
-    public static RequestFragment newInstance(List<String> permissions) {
-        Bundle args = new Bundle();
-        args.putStringArrayList(RequestFragment.class.getCanonicalName(),
-                new ArrayList<>(permissions));
+    public static RequestFragment
+    newInstance(List<String> permissions) {
         RequestFragment fragment = new RequestFragment();
-        fragment.setArguments(args);
+        fragment.requests = new ArrayList<>(permissions);
         fragment.setRetainInstance(true);
         return fragment;
     }
@@ -42,9 +39,7 @@ public final class RequestFragment
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        requests = getArguments()
-                .getStringArrayList(RequestFragment.class.getCanonicalName());
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && requests != null) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             requestPermissions(requests.toArray(new String[0]), REQUEST_NORMAL_PERMISSIONS);
         }
     }
@@ -95,16 +90,14 @@ public final class RequestFragment
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.M)
     @Override
     public void onDestroy() {
         super.onDestroy();
-        Context context = getContext().getApplicationContext();
-        if (context instanceof OnRequestPermissionsCallback) {
-            ((OnRequestPermissionsCallback) context).onRequestPermissionsResult(requests.isEmpty()
-                    ? Collections.<String>emptyList()
-                    : Collections.unmodifiableList(requests)
-            );
+        List<String> result = requests.isEmpty()
+                ? Collections.<String>emptyList()
+                : Collections.unmodifiableList(requests);
+        for (OnRequestPermissionsCallback callback : AutoPermissions.sCallbacks) {
+            callback.onRequestPermissionsResult(result);
         }
     }
 }
